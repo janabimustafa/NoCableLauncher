@@ -7,6 +7,7 @@ using System.Globalization;
 using System.IO;
 using NoCableLauncher.CoreAudioApi;
 using System.Linq;
+using System.Management;
 
 namespace NoCableLauncher
 {
@@ -104,13 +105,34 @@ namespace NoCableLauncher
 
             Environment.Exit(0);
         }
+        private static bool IsUsbDeviceConnected(string pid, string vid)
+        {
+            using (var searcher =
+              new ManagementObjectSearcher(@"Select * From Win32_USBControllerDevice"))
+            {
+                using (var collection = searcher.Get())
+                {
+                    foreach (var device in collection)
+                    {
+                        var usbDevice = Convert.ToString(device);
 
+                        if (usbDevice.Contains(pid) && usbDevice.Contains(vid))
+                            return true;
+                    }
+                }
+            }
+            return false;
+        }
+        private static bool IsDeviceUsbAndConnected(string pid, string vid)
+        {
+            return ((settings.VID.All(number => number == 0) && settings.PID.All(number => number == 0)) || IsUsbDeviceConnected(settings.PID, settings.VID));
+        }
         private static void ReadDeviceValues(bool multiplayer)
         {
             try
-            {
-                //Getting device VID & PID
-                if (!multiplayer)
+            {            
+                //Getting device VID & PID. Fallback to secondary device if first does not exist
+                if (IsDeviceUsbAndConnected(settings.PID, settings.VID) &&  !multiplayer)
                 {
                     vid = GetDevId(settings.VID);
                     pid = GetDevId(settings.PID);
@@ -316,7 +338,7 @@ namespace NoCableLauncher
             }
             else
             {
-                if (settings.Multiplayer)
+                if (settings.Multiplayer && IsDeviceUsbAndConnected(settings.PID, settings.VID))
                 {
                     //Disable player2 record device
                     SetDeviceState(settings.GUID2, false);
